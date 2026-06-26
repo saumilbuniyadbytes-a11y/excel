@@ -2,7 +2,7 @@
 
 The `excel_builder.js` file is responsible for generating the Excel file.
 
-It contains a function named `createExcelWithImages`, which accepts a JSON object as input.
+It contains a function named `main`, which accepts a JSON object as input.
 
 ### JSON Requirements
 
