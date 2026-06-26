@@ -120,6 +120,6 @@ async function createExcelWithImages(json_file) {
     console.log("Excel file created: final.xlsx");
 }
 
-json_file="output.json"
+const json_file="output.json"
 
 createExcelWithImages(json_file).catch(console.error);
