@@ -1,125 +1,79 @@
-console.time("total");
-const XLSX = require('xlsx');
-const fs = require('fs');
-const ExcelJS = require('exceljs');
-const path = require('path');
+// console.time("total");
+const XLSX = require("xlsx");
+const fs = require("fs");
+const ExcelJS = require("exceljs");
+const path = require("path");
 
-// Create workbook with ExcelJS directly (no need for temp file)
-async function createExcelWithImages(json_file) {
-    const data = JSON.parse(fs.readFileSync(json_file, 'utf8'));
-    const workbook = new ExcelJS.Workbook();
-    const sheet = workbook.addWorksheet('BBS');
-
-    // Get headers from first object
-    const headers = Object.keys(data[0]);
-    
-    // Add header row with styling
-    const headerRow = sheet.addRow(headers);
-    headerRow.eachCell((cell) => {
-        cell.font = { bold: true };
-        cell.fill = {
-            type: 'pattern',
-            pattern: 'solid',
-            fgColor: { argb: 'FFD9E1F2' }
-        };
-        cell.border = {
-            top: { style: 'thin' },
-            left: { style: 'thin' },
-            bottom: { style: 'thin' },
-            right: { style: 'thin' }
-        };
-        cell.alignment = { horizontal: 'center', vertical: 'middle' };
-    });
-
-    // Find Shape column index (1-based for ExcelJS)
-    const shapeColIndex = headers.indexOf('Shape') + 1;
-
-    // Add data rows
-    for (let i = 0; i < data.length; i++) {
-        const row = data[i];
-        const values = headers.map(h => row[h] === null ? '' : row[h]);
-        const excelRow = sheet.addRow(values);
-
-        // Add borders to all cells
-        excelRow.eachCell((cell) => {
-            cell.border = {
-                top: { style: 'thin' },
-                left: { style: 'thin' },
-                bottom: { style: 'thin' },
-                right: { style: 'thin' }
-            };
-        });
-
-        // Handle image
-        let imagePath = row['Shape'];
-
-        // Skip if no valid path
-        if (!imagePath || imagePath === null || imagePath === 'null' || imagePath === '') {
-            console.log(`Row ${i + 2}: No image path`);
-            continue;
-        }
-
-        // Convert to string and clean
-        imagePath = String(imagePath).trim();
-
-        // Try adding .png if no extension
-        if (!path.extname(imagePath)) {
-            imagePath = imagePath + '.png';
-        }
-
-        // Check if file exists
-        if (!fs.existsSync(imagePath)) {
-            console.log(`Row ${i + 2}: Image not found - ${imagePath}`);
-            continue;
-        }
-
-        // Get extension
-        const ext = path.extname(imagePath).slice(1).toLowerCase();
-
-        // Add image to workbook
-        const imageId = workbook.addImage({
-            filename: imagePath,
-            extension: ext
-        });
-
-        // Set row height for image
-        excelRow.height = 80;
-
-        // Insert image into cell
-        sheet.addImage(imageId, {
-            tl: { col: shapeColIndex - 1, row: i + 1 },  // 0-based
-            ext: { width: 100, height: 80 }
-        });
-
-        // Clear the cell text
-        excelRow.getCell(shapeColIndex).value = '';
-
-        console.log(`Row ${i + 2}: Image added - ${imagePath}`);
-    }
-
-    // Auto-fit column widths
-    sheet.columns.forEach((column) => {
-        let maxLength = 0;
-        column.eachCell({ includeEmpty: true }, (cell) => {
-            const columnLength = cell.value ? String(cell.value).length : 10;
-            if (columnLength > maxLength) {
-                maxLength = columnLength;
-            }
-        });
-        column.width = Math.min(maxLength + 2, 30);
-    });
-
-    // Set Shape column width specifically for image
-    if (shapeColIndex > 0) {
-        sheet.getColumn(shapeColIndex).width = 15;
-    }
-
-    // Save file
-    await workbook.xlsx.writeFile('final.xlsx');
-    console.timeEnd("total");
-    console.log("Excel file created: final.xlsx");
+async function makeExcel(data) {
+  // console.time("building time");
+  // make new file
+  const workbook = XLSX.utils.book_new();
+  // make new worksheet
+  const worksheet = XLSX.utils.json_to_sheet(data);
+  // add sheet in file
+  XLSX.utils.book_append_sheet(workbook, worksheet, "Beam");
+  XLSX.writeFile(workbook, "final.xlsx");
+  // console.timeEnd("building time");
 }
 
-const json_file="output.json"
+async function image(data) {
+  console.time("total");
+  const workbook = new ExcelJS.Workbook();
+  await workbook.xlsx.readFile("final.xlsx");
+  const worksheet = workbook.getWorksheet("Beam");
+  const headerRow = worksheet.getRow(1);
+  let shapeCol;
 
-createExcelWithImages(json_file).catch(console.error);
+  headerRow.eachCell((cell, colNumber) => {
+    if (cell.value === "Shape") {
+      shapeCol = colNumber;
+    }
+  });
+
+  data.forEach((item, index) => {
+    let imagePath = item.Shape;
+
+    if (!imagePath) {
+      // console.log(`Row ${index + 2}: No image`);
+      return;
+    }
+
+    imagePath = String(imagePath).trim();
+
+    if (!path.extname(imagePath)) {
+      imagePath += ".png";
+    }
+
+    if (!fs.existsSync(imagePath)) {
+      // console.log(`Row ${index + 2}: image not found - "${imagePath}"`);
+      return;
+    }
+
+    const imageId = workbook.addImage({
+      filename: imagePath,
+      extension: path.extname(imagePath).substring(1),
+    });
+
+    const excelRow = index + 2;
+
+    worksheet.addImage(imageId, {
+      tl: { col: shapeCol - 1, row: excelRow - 1 },
+      ext: { width: 60, height: 60 },
+    });
+    worksheet.getRow(excelRow).height = 50;
+  });
+  await workbook.xlsx.writeFile("final.xlsx");
+
+  console.timeEnd("total");
+}
+
+async function main(json_file) {
+  const data = JSON.parse(fs.readFileSync(json_file, "utf-8"));
+  await makeExcel(data);
+  await image(data);
+}
+const json_file = "output.json";
+
+// createExcelWithImages(json_file).catch(console.error);
+main(json_file);
+// console.timeEnd("total");
